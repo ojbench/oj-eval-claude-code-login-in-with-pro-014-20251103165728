@@ -1096,33 +1096,26 @@ std::any EvalVisitor::visitAtom(Python3Parser::AtomContext *ctx) {
 
 std::any EvalVisitor::visitFormat_string(Python3Parser::Format_stringContext *ctx) {
     std::string result;
-    
+
     auto literals = ctx->FORMAT_STRING_LITERAL();
     auto testlists = ctx->testlist();
-    
+
     size_t literalIdx = 0;
     size_t testlistIdx = 0;
-    
+
     // Iterate through children to maintain order
     for (size_t i = 0; i < ctx->children.size(); i++) {
         auto child = ctx->children[i];
-        std::string childText = child->getText();
-        
-        if (childText == "f\"" || childText == "f'" || childText == "\"" || childText == "'") {
-            // Skip quotes
-            continue;
-        } else if (childText == "{") {
-            // Expression
-            if (testlistIdx < testlists.size()) {
-                Value val = std::any_cast<Value>(visit(testlists[testlistIdx++]));
-                result += val.toString();
+
+        // Check if it's a terminal node
+        auto terminal = dynamic_cast<antlr4::tree::TerminalNode*>(child);
+        if (terminal) {
+            std::string text = terminal->getText();
+            if (text == "f\"" || text == "f'" || text == "\"" || text == "'" || text == "{" || text == "}") {
+                // Skip quotes and braces
+                continue;
             }
-        } else if (childText == "}") {
-            // Skip closing brace
-            continue;
-        } else {
-            // Literal text - unescape {{ and }}
-            std::string text = childText;
+            // It's a FORMAT_STRING_LITERAL - unescape {{ and }}
             std::string unescaped;
             for (size_t j = 0; j < text.length(); j++) {
                 if (j + 1 < text.length() && text[j] == '{' && text[j + 1] == '{') {
@@ -1136,9 +1129,15 @@ std::any EvalVisitor::visitFormat_string(Python3Parser::Format_stringContext *ct
                 }
             }
             result += unescaped;
+        } else {
+            // It's a testlist node
+            if (testlistIdx < testlists.size()) {
+                Value val = std::any_cast<Value>(visit(testlists[testlistIdx++]));
+                result += val.toString();
+            }
         }
     }
-    
+
     return Value(result);
 }
 
